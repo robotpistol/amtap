@@ -6,12 +6,11 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 
-from mutagen.id3 import ID3, ID3NoHeaderError, TBPM
+from mutagen.id3 import ID3, TBPM, ID3NoHeaderError
 from textual.app import App, ComposeResult
 from textual.events import Key
 from textual.reactive import reactive
 from textual.widgets import Footer, Label, Static
-
 
 # ---------------------------------------------------------------------------
 # Apple Music helpers
@@ -187,28 +186,41 @@ class TapPane(Static):
         yield Label("TAP BPM", classes="section-title")
         yield Label("Current: —    Taps: 0", id="tap-status")
 
-    def update_session(self, session: TapSession, fallback_bpm: int | None = None) -> None:
+    def update_session(
+        self, session: TapSession, fallback_bpm: int | None = None
+    ) -> None:
         label = self.query_one("#tap-status", Label)
+        n = session.count
 
         bpm = session.bpm
         if bpm is None:
             if fallback_bpm is not None:
-                label.update(f"Current: [dim]{fallback_bpm}[/dim]    Taps: {session.count}")
+                label.update(f"Current: [dim]{fallback_bpm}[/dim]    Taps: {n}")
             else:
-                label.update(f"Current: —    Taps: {session.count}")
+                label.update(f"Current: —    Taps: {n}")
             return
 
         bpm_str = str(round(bpm))
         stddev = session.stddev_ms
 
         if stddev is None:
-            label.update(f"Current: {bpm_str}    Taps: {session.count}")
+            text = f"Current: {bpm_str}    Taps: {n}"
         elif stddev < 40:
-            label.update(f"Current: [$success]{bpm_str}[/$success]    Taps: {session.count}    [dim]● locked in[/dim]")
+            text = (
+                f"Current: [$success]{bpm_str}[/$success]"
+                f"    Taps: {n}    [dim]● locked in[/dim]"
+            )
         elif stddev < 100:
-            label.update(f"Current: [$warning]{bpm_str}[/$warning]    Taps: {session.count}    [dim]● getting there[/dim]")
+            text = (
+                f"Current: [$warning]{bpm_str}[/$warning]"
+                f"    Taps: {n}    [dim]● getting there[/dim]"
+            )
         else:
-            label.update(f"Current: [$error]{bpm_str}[/$error]    Taps: {session.count}    [dim]● inconsistent[/dim]")
+            text = (
+                f"Current: [$error]{bpm_str}[/$error]"
+                f"    Taps: {n}    [dim]● inconsistent[/dim]"
+            )
+        label.update(text)
 
 
 class StatusBar(Static):
@@ -282,7 +294,8 @@ class AmtapApp(App):
 
     def _do_reset(self) -> None:
         self._session.reset()
-        self.query_one("#tap-pane", TapPane).update_session(self._session, self._last_bpm)
+        tap_pane = self.query_one("#tap-pane", TapPane)
+        tap_pane.update_session(self._session, self._last_bpm)
 
     def on_key(self, event: Key) -> None:
         if self._confirming:
@@ -313,7 +326,8 @@ class AmtapApp(App):
         if self._session.bpm is not None:
             self._last_bpm = round(self._session.bpm)
 
-        self.query_one("#tap-pane", TapPane).update_session(self._session, self._last_bpm)
+        tap_pane = self.query_one("#tap-pane", TapPane)
+        tap_pane.update_session(self._session, self._last_bpm)
 
     def action_save(self) -> None:
         if self._confirming:
